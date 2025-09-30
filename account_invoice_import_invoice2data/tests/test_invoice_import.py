@@ -173,7 +173,8 @@ class TestInvoiceImport(TransactionCase):
         self.assertEqual(
             float_compare(inv.amount_untaxed, 262.9, precision_digits=2), 0
         )
-
+        logging.getLogger("").warning("=== Invoices ===")
+        logging.getLogger("").warning(invoices)
         self.assertEqual(
             inv.narration,
             "Due to global inflation our payment term has changed to 15 days.",
