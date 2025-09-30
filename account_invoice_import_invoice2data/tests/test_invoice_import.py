@@ -7,21 +7,13 @@ import logging
 from unittest import mock
 
 from odoo import fields
-from odoo.tests.common import SavepointCase
+from odoo.tests.common import TransactionCase
 from odoo.tools import file_open, float_compare
 
-# TODO v16: use
-# from odoo.addons.base.tests.common import DISABLED_MAIL_CONTEXT
-DISABLED_MAIL_CONTEXT = {
-    "tracking_disable": True,
-    "mail_create_nolog": True,
-    "mail_create_nosubscribe": True,
-    "mail_notrack": True,
-    "no_reset_password": True,
-}
+from odoo.addons.base.tests.common import DISABLED_MAIL_CONTEXT
 
 
-class TestInvoiceImport(SavepointCase):
+class TestInvoiceImport(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -53,19 +45,25 @@ class TestInvoiceImport(SavepointCase):
                 logging.getLogger("").debug("Cannot import tesseract")
             self.assertEqual(cm.output, ["DEBUG:root:Cannot import tesseract"])
 
-    def test_import_free_invoice(self):
+    def test_invoice_file(self):
         filename = "invoice_free_fiber_201507.pdf"
         f = file_open("account_invoice_import_invoice2data/tests/pdf/" + filename, "rb")
         pdf_file = f.read()
-        pdf_file_b64 = base64.b64encode(pdf_file)
+        invoice_file = self.env["ir.attachment"].create(
+            {
+                "name": filename,
+                "res_model": self.env["account.invoice.import"]._name,
+                "datas": base64.b64encode(pdf_file),
+                "type": "binary",
+            }
+        )
         wiz = self.env["account.invoice.import"].create(
             {
-                "invoice_file": pdf_file_b64,
-                "invoice_filename": filename,
+                "invoice_attachment_ids": invoice_file,
             }
         )
         f.close()
-        wiz.import_invoice()
+        wiz.import_invoices()
         # Check result of invoice creation
         invoices = self.env["account.move"].search(
             [
@@ -108,14 +106,14 @@ class TestInvoiceImport(SavepointCase):
         # New import with update of an existing draft invoice
         wiz2 = self.env["account.invoice.import"].create(
             {
-                "invoice_file": pdf_file_b64,
-                "invoice_filename": "invoice_free_fiber_201507.pdf",
+                "invoice_attachment_ids": invoice_file,
             }
         )
-        action = wiz2.import_invoice()
-        self.assertEqual(action["res_model"], "account.invoice.import")
+        action = wiz2.import_invoices()
+
+        self.assertEqual(action["res_model"], "account.move")
         # Choose to update the existing invoice
-        wiz2.update_invoice()
+        # wiz2.update_invoice()
         invoices = self.env["account.move"].search(
             [
                 ("state", "=", "draft"),
@@ -130,21 +128,32 @@ class TestInvoiceImport(SavepointCase):
     def test_import_azure_interior_invoice(self):
         """Function for testing almost all supported fields"""
         filename = "AzureInterior.pdf"
-        invoice_file = file_open(
-            "account_invoice_import_invoice2data/tests/pdf/" + filename, "rb"
-        )
-        pdf_file = invoice_file.read()
-        pdf_file_b64 = base64.b64encode(pdf_file)
-        wiz = self.env["account.invoice.import"].create(
+        f = file_open("account_invoice_import_invoice2data/tests/pdf/" + filename, "rb")
+        pdf_file = f.read()
+        invoice_file = self.env["ir.attachment"].create(
             {
-                "invoice_file": pdf_file_b64,
-                "invoice_filename": filename,
+                "name": filename,
+                "res_model": self.env["account.invoice.import"]._name,
+                "datas": base64.b64encode(pdf_file),
+                "type": "binary",
             }
         )
-        invoice_file.close()
-        wiz.import_invoice()
+        # pdf_file_b64 = base64.b64encode(pdf_file)
+        wiz = self.env["account.invoice.import"].create(
+            {
+                "invoice_attachment_ids": invoice_file,
+            }
+        )
+        f.close()
+        wiz.import_invoices()
         # create_invoice_action_button
-        wiz.create_invoice_action(origin="BOSD Import Vendor Bill wizard")
+        invoice_file_b64 = invoice_file.datas
+        invoice_filename = invoice_file.name
+        company = self.env.company
+        parsed_invoice = wiz.parse_invoice(invoice_file_b64, invoice_filename, company)
+        wiz.create_invoice_action(
+            parsed_inv=parsed_invoice, origin="BOSD Import Vendor Bill wizard"
+        )
         # Check result of invoice creation
         invoices = self.env["account.move"].search(
             [
