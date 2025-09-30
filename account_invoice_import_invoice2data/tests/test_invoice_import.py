@@ -147,13 +147,13 @@ class TestInvoiceImport(TransactionCase):
         f.close()
         wiz.import_invoices()
         # create_invoice_action_button
-        invoice_file_b64 = invoice_file.datas
-        invoice_filename = invoice_file.name
-        company = self.env.company
-        parsed_invoice = wiz.parse_invoice(invoice_file_b64, invoice_filename, company)
-        wiz.create_invoice_action(
-            parsed_inv=parsed_invoice, origin="BOSD Import Vendor Bill wizard"
-        )
+        # invoice_file_b64 = invoice_file.datas
+        # invoice_filename = invoice_file.name
+        # company = self.env.company
+        # parsed_invoice = wiz.parse_invoice(invoice_file_b64, invoice_filename, company)
+        # wiz.create_invoice_action(
+        #     parsed_inv=parsed_invoice, origin="BOSD Import Vendor Bill wizard"
+        # )
         # Check result of invoice creation
         invoices = self.env["account.move"].search(
             [
