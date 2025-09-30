@@ -98,7 +98,9 @@ class AccountInvoiceImport(models.TransientModel):
             invoice2data_res = extract_data(fileobj.name, templates=templates)
         except Exception as e:
             fileobj.close()
-            raise UserError(_("PDF Invoice parsing failed. Error message: %s") % e) from e
+            raise UserError(
+                _("PDF Invoice parsing failed. Error message: %s") % e
+            ) from e
         if not invoice2data_res:
             if not shutil.which("tesseract"):
                 logger.warning(
@@ -116,7 +118,9 @@ class AccountInvoiceImport(models.TransientModel):
                 )
             except Exception as e:
                 fileobj.close()
-                raise UserError(_("PDF Invoice parsing failed. Error message: %s") % e) from e
+                raise UserError(
+                    _("PDF Invoice parsing failed. Error message: %s") % e
+                ) from e
             if not invoice2data_res:
                 fileobj.close()
                 return False
