@@ -185,6 +185,10 @@ class TestInvoiceImport(TransactionCase):
 
         self.assertEqual(len(inv.invoice_line_ids), 7)
         iline = inv.invoice_line_ids[0]
+        logging.getLogger("").warning(inv.invoice_line_ids)
+        for line in inv.invoice_line_ids:
+            logging.getLogger("").warning(line)
+            logging.getLogger("").warning(line.name)
         self.assertEqual(iline.name, "--- Non Food ---")
         self.assertEqual(iline.display_type, "line_section")
         iline = inv.invoice_line_ids[1]
