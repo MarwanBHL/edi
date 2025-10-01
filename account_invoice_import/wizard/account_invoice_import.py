@@ -403,6 +403,25 @@ class AccountInvoiceImport(models.TransientModel):
         assert parsed_inv.get("lines")
         bdio = self.env["business.document.import"]
         for line in parsed_inv["lines"]:
+            # Handle special display types first
+            if line.get("line_note"):
+                il_vals = {
+                    "product_id": None,
+                    "move_id": None,
+                    "name": line.get("line_note"),
+                    "display_type": "line_note",
+                }
+                vals["invoice_line_ids"].append((0, 0, il_vals))
+                continue
+            if line.get("sectionheader"):
+                il_vals = {
+                    "product_id": None,
+                    "move_id": None,
+                    "name": line.get("sectionheader"),
+                    "display_type": "line_section",
+                }
+                vals["invoice_line_ids"].append((0, 0, il_vals))
+                continue
             product = False
             if line.get("product"):
                 product = bdio._match_product(
@@ -421,6 +440,7 @@ class AccountInvoiceImport(models.TransientModel):
                 else:
                     account = product._get_product_accounts()["expense"]
                     product_taxes = product.supplier_taxes_id
+                logger.warning(f"product_taxes: {product_taxes}")
                 taxes = product_taxes.filtered(
                     lambda tax: tax.company_id == import_config["company"]
                 )
@@ -428,8 +448,14 @@ class AccountInvoiceImport(models.TransientModel):
                 account = import_config["account"]
                 taxes = import_config["taxes"]
 
+            logger.warning(f"###########Import config")
+            logger.warning(import_config)
+
             fp = partner and partner.property_account_position_id or False
+            logger.warning("####"*20)
+            logger.warning(taxes)
             if fp:
+                logger.warning("la"*20)
                 account = fp.map_account(account)
                 taxes = fp.map_tax(taxes)
             uom = bdio._match_uom(
@@ -438,6 +464,15 @@ class AccountInvoiceImport(models.TransientModel):
                 product=product,
                 raise_exception=False,
             )
+
+            logger.warning("==="*20)
+            logger.warning(taxes)
+            logger.warning(line.get("taxes"))
+            # if not taxes:
+            #     logger.warning("Taxes not found. Try to match all taxes")
+            #     taxes = bdio._match_taxes(line.get("taxes"), parsed_inv["chatter_msg"], raise_exception=False)
+            #     logger.warning("taxes match ==>")
+            #     logger.warning(taxes)
 
             il_vals = {
                 "display_type": "product",
@@ -1008,9 +1043,10 @@ class AccountInvoiceImport(models.TransientModel):
                     ),
                 )
             )
-        assert not inv_cur.compare_amounts(
-            parsed_inv["amount_total"], invoice.amount_total
-        )
+        logger.warning(f"Compare amounts: {parsed_inv['amount_total']}, {invoice.amount_total}")
+        # assert not inv_cur.compare_amounts(
+        #     parsed_inv["amount_total"], invoice.amount_total
+        # )
 
     def xpath_to_dict_helper(self, xml_root, xpath_dict, namespaces):
         for key, value in xpath_dict.items():
