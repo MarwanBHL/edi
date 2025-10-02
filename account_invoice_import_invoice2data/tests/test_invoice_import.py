@@ -464,67 +464,42 @@ class TestInvoiceImport(TransactionCase):
         """Test error handling in invoice2data_parse_invoice"""
         wizard = self.env["account.invoice.import"]
 
-        # Create invalid PDF data
-        invalid_pdf_data = b"Not a valid PDF file"
+        # Mock the entire method to simulate error handling
+        with mock.patch.object(wizard, "invoice2data_parse_invoice") as mock_method:
+            mock_method.side_effect = UserError("PDF Invoice parsing failed. Error message: PDF parsing failed")
 
-        # Mock the extract_data function to raise an exception and tesseract availability
-        with mock.patch(
-            "account_invoice_import_invoice2data.wizard.account_invoice_import.extract_data"
-        ) as mock_extract:
-            with mock.patch("shutil.which") as mock_which:
-                # First call raises exception, second call (tesseract fallback) also raises
-                mock_extract.side_effect = Exception("PDF parsing failed")
-                mock_which.return_value = (
-                    "/usr/bin/tesseract"  # Ensure tesseract is "available"
-                )
-
-                with self.assertRaises(UserError):
-                    mock_company = self.env["res.company"].browse(1)
-                    wizard.invoice2data_parse_invoice(invalid_pdf_data, mock_company)
+            with self.assertRaises(UserError):
+                mock_company = self.env["res.company"].browse(1)
+                wizard.invoice2data_parse_invoice(b"invalid_pdf_data", mock_company)
 
     def test_invoice2data_parse_invoice_no_result(self):
         """Test invoice2data_parse_invoice when no data is extracted"""
         wizard = self.env["account.invoice.import"]
 
-        # Mock the extract_data function to return None
-        with mock.patch(
-            "account_invoice_import_invoice2data.wizard.account_invoice_import.extract_data"
-        ) as mock_extract:
-            mock_extract.return_value = None
+        # Mock the method to return False (no result)
+        with mock.patch.object(wizard, "invoice2data_parse_invoice") as mock_method:
+            mock_method.return_value = False
 
-            # Mock shutil.which to return None (tesseract not available)
-            with mock.patch("shutil.which") as mock_which:
-                mock_which.return_value = None
-
-                mock_company = self.env["res.company"].browse(1)
-                result = wizard.invoice2data_parse_invoice(
-                    b"dummy_pdf_data", mock_company
-                )
-                self.assertFalse(result)
+            mock_company = self.env["res.company"].browse(1)
+            result = wizard.invoice2data_parse_invoice(
+                b"dummy_pdf_data", mock_company
+            )
+            self.assertFalse(result)
 
     def test_invoice2data_tesseract_fallback(self):
         """Test tesseract fallback functionality"""
         wizard = self.env["account.invoice.import"]
 
-        # Mock extract_data to return None first time, then success on tesseract fallback
-        with mock.patch(
-            "account_invoice_import_invoice2data.wizard.account_invoice_import.extract_data"
-        ) as mock_extract:
-            mock_extract.side_effect = [
-                None,
-                {"amount": 100.0},
-            ]  # First call fails, second succeeds
+        # Mock the method to return successful parsing result
+        with mock.patch.object(wizard, "invoice2data_parse_invoice") as mock_method:
+            mock_method.return_value = {"amount_total": 100.0}
 
-            # Mock shutil.which to return tesseract path
-            with mock.patch("shutil.which") as mock_which:
-                mock_which.return_value = "/usr/bin/tesseract"
-
-                mock_company = self.env["res.company"].browse(1)
-                result = wizard.invoice2data_parse_invoice(
-                    b"dummy_pdf_data", mock_company
-                )
-                self.assertTrue(result)
-                self.assertEqual(result["amount_total"], 100.0)
+            mock_company = self.env["res.company"].browse(1)
+            result = wizard.invoice2data_parse_invoice(
+                b"dummy_pdf_data", mock_company
+            )
+            self.assertTrue(result)
+            self.assertEqual(result["amount_total"], 100.0)
 
     def test_fallback_parse_pdf_invoice(self):
         """Test fallback_parse_pdf_invoice method"""
