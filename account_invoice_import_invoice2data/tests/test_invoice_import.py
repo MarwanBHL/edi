@@ -476,8 +476,9 @@ class TestInvoiceImport(TransactionCase):
                 )
 
                 with self.assertRaises(UserError):
+                    mock_company = self.env["res.company"].browse(1)
                     wizard.invoice2data_parse_invoice(
-                        invalid_pdf_data, self.env.company
+                        invalid_pdf_data, mock_company
                     )
 
     def test_invoice2data_parse_invoice_no_result(self):
@@ -492,8 +493,9 @@ class TestInvoiceImport(TransactionCase):
             with mock.patch("shutil.which") as mock_which:
                 mock_which.return_value = None
 
+                mock_company = self.env["res.company"].browse(1)
                 result = wizard.invoice2data_parse_invoice(
-                    b"dummy_pdf_data", self.env.company
+                    b"dummy_pdf_data", mock_company
                 )
                 self.assertFalse(result)
 
@@ -512,8 +514,9 @@ class TestInvoiceImport(TransactionCase):
             with mock.patch("shutil.which") as mock_which:
                 mock_which.return_value = "/usr/bin/tesseract"
 
+                mock_company = self.env["res.company"].browse(1)
                 result = wizard.invoice2data_parse_invoice(
-                    b"dummy_pdf_data", self.env.company
+                    b"dummy_pdf_data", mock_company
                 )
                 self.assertTrue(result)
                 self.assertEqual(result["amount_total"], 100.0)
@@ -529,8 +532,10 @@ class TestInvoiceImport(TransactionCase):
                 mock_super.return_value.fallback_parse_pdf_invoice.return_value = False
                 mock_i2d.return_value = {"amount_total": 150.0}
 
+                # Create a mock company object to avoid env.company issues
+                mock_company = self.env["res.company"].browse(1)
                 result = wizard.fallback_parse_pdf_invoice(
-                    b"dummy_pdf_data", self.env.company
+                    b"dummy_pdf_data", mock_company
                 )
                 self.assertTrue(result)
                 self.assertEqual(result["amount_total"], 150.0)
