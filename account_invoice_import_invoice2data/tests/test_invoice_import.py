@@ -276,7 +276,8 @@ class TestInvoiceImport(TransactionCase):
         wizard = self.env["account.invoice.import"]
 
         # Test with price_total but no price_subtotal (implies tax included)
-        # The function has a bug where it sets price_include=True but doesn't define amount_type/amount
+        # The function has a bug where it sets price_include=True but
+        # doesn't define amount_type/amount
         # This causes an UnboundLocalError when trying to access undefined variables
         line_data = {"price_total": 120.0}
 
@@ -467,7 +468,9 @@ class TestInvoiceImport(TransactionCase):
         invalid_pdf_data = b"Not a valid PDF file"
 
         # Mock the extract_data function to raise an exception and tesseract availability
-        with mock.patch("invoice2data.main.extract_data") as mock_extract:
+        with mock.patch(
+            "account_invoice_import_invoice2data.wizard.account_invoice_import.extract_data"
+        ) as mock_extract:
             with mock.patch("shutil.which") as mock_which:
                 # First call raises exception, second call (tesseract fallback) also raises
                 mock_extract.side_effect = Exception("PDF parsing failed")
@@ -477,16 +480,16 @@ class TestInvoiceImport(TransactionCase):
 
                 with self.assertRaises(UserError):
                     mock_company = self.env["res.company"].browse(1)
-                    wizard.invoice2data_parse_invoice(
-                        invalid_pdf_data, mock_company
-                    )
+                    wizard.invoice2data_parse_invoice(invalid_pdf_data, mock_company)
 
     def test_invoice2data_parse_invoice_no_result(self):
         """Test invoice2data_parse_invoice when no data is extracted"""
         wizard = self.env["account.invoice.import"]
 
         # Mock the extract_data function to return None
-        with mock.patch("invoice2data.main.extract_data") as mock_extract:
+        with mock.patch(
+            "account_invoice_import_invoice2data.wizard.account_invoice_import.extract_data"
+        ) as mock_extract:
             mock_extract.return_value = None
 
             # Mock shutil.which to return None (tesseract not available)
@@ -504,7 +507,9 @@ class TestInvoiceImport(TransactionCase):
         wizard = self.env["account.invoice.import"]
 
         # Mock extract_data to return None first time, then success on tesseract fallback
-        with mock.patch("invoice2data.main.extract_data") as mock_extract:
+        with mock.patch(
+            "account_invoice_import_invoice2data.wizard.account_invoice_import.extract_data"
+        ) as mock_extract:
             mock_extract.side_effect = [
                 None,
                 {"amount": 100.0},
