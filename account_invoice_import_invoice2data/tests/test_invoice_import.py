@@ -174,9 +174,9 @@ class TestInvoiceImport(TransactionCase):
             float_compare(inv.amount_untaxed, 262.9, precision_digits=2), 0
         )
 
-        self.assertEqual(
+        self.assertHTMLEqual(
             inv.narration,
-            "Due to global inflation our payment term has changed to 15 days.",
+            "<p>Due to global inflation our payment term has changed to 15 days.</p>",
         )
 
         # Following tests are disabled. Not yet implemented in account_invoice_import
