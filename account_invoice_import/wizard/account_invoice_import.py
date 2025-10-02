@@ -449,7 +449,7 @@ class AccountInvoiceImport(models.TransientModel):
                 account = import_config["account"]
                 taxes = import_config["taxes"]
 
-            logger.warning(f"###########Import config")
+            logger.warning("###########Import config")
             logger.warning(import_config)
 
             fp = partner and partner.property_account_position_id or False
@@ -471,7 +471,8 @@ class AccountInvoiceImport(models.TransientModel):
             logger.warning(line.get("taxes"))
             # if not taxes:
             #     logger.warning("Taxes not found. Try to match all taxes")
-            #     taxes = bdio._match_taxes(line.get("taxes"), parsed_inv["chatter_msg"], raise_exception=False)
+            #     taxes = bdio._match_taxes(line.get("taxes"), parsed_inv["chatter_msg"],
+            # raise_exception=False)
             #     logger.warning("taxes match ==>")
             #     logger.warning(taxes)
 
