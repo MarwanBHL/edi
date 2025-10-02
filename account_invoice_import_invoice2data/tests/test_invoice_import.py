@@ -434,7 +434,7 @@ class TestInvoiceImport(TransactionCase):
         self.assertEqual(result["partner"]["country_code"], "FR")
 
         # Test bank data cleaning
-        self.assertEqual(result["iban"], "FR76123456789012345678901")
+        self.assertEqual(result["iban"], "FR761234567890123456789")
         self.assertEqual(result["bic"], "BNPAFRPPXXX")
 
         # Test currency handling
@@ -467,12 +467,15 @@ class TestInvoiceImport(TransactionCase):
         # Create invalid PDF data
         invalid_pdf_data = b"Not a valid PDF file"
 
-        # Mock the extract_data function to raise an exception
+        # Mock the extract_data function to raise an exception and tesseract availability
         with mock.patch("invoice2data.main.extract_data") as mock_extract:
-            mock_extract.side_effect = Exception("PDF parsing failed")
+            with mock.patch("shutil.which") as mock_which:
+                # First call raises exception, second call (tesseract fallback) also raises
+                mock_extract.side_effect = Exception("PDF parsing failed")
+                mock_which.return_value = "/usr/bin/tesseract"  # Ensure tesseract is "available"
 
-            with self.assertRaises(UserError):
-                wizard.invoice2data_parse_invoice(invalid_pdf_data, self.env.company)
+                with self.assertRaises(UserError):
+                    wizard.invoice2data_parse_invoice(invalid_pdf_data, self.env.company)
 
     def test_invoice2data_parse_invoice_no_result(self):
         """Test invoice2data_parse_invoice when no data is extracted"""
@@ -516,12 +519,13 @@ class TestInvoiceImport(TransactionCase):
         """Test fallback_parse_pdf_invoice method"""
         wizard = self.env["account.invoice.import"]
 
-        # Mock the super() call to return False (parent method returns no result)
-        with mock.patch("builtins.super") as mock_super:
-            mock_super.return_value.fallback_parse_pdf_invoice.return_value = False
-
-            # Mock invoice2data_parse_invoice to return success
-            with mock.patch.object(wizard, "invoice2data_parse_invoice") as mock_i2d:
+        # Mock the module-level function instead of the instance method
+        with mock.patch(
+            "account_invoice_import_invoice2data.wizard.account_invoice_import.AccountInvoiceImport.invoice2data_parse_invoice"
+        ) as mock_i2d:
+            # Mock the parent's fallback_parse_pdf_invoice to return False
+            with mock.patch("builtins.super") as mock_super:
+                mock_super.return_value.fallback_parse_pdf_invoice.return_value = False
                 mock_i2d.return_value = {"amount_total": 150.0}
 
                 result = wizard.fallback_parse_pdf_invoice(

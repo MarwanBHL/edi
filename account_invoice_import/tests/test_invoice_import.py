@@ -736,8 +736,8 @@ Nina
 
     def test_line_with_uom_and_product(self):
         """Test invoice line creation with UOM and product matching"""
-        # Use existing UOM to avoid reference unit validation error
-        uom_kg = self.env.ref("uom.product_uom_kgm")
+        # Use Units UOM which is compatible with the default product UOM category
+        uom_unit = self.env.ref("uom.product_uom_unit")
 
         parsed_inv = {
             "type": "in_invoice",
@@ -748,7 +748,7 @@ Nina
                     "name": "Product with UOM",
                     "qty": 5,
                     "price_unit": 50,
-                    "uom": {"name": "kg"},
+                    "uom": {"name": "Units"},
                 }
             ],
         }
@@ -760,4 +760,4 @@ Nina
 
         line = invoice.invoice_line_ids.filtered(lambda x: x.display_type == "product")
         self.assertEqual(line.product_id, self.product)
-        self.assertEqual(line.product_uom_id, uom_kg)
+        self.assertEqual(line.product_uom_id, uom_unit)
