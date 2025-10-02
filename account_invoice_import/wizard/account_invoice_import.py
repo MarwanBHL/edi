@@ -453,10 +453,10 @@ class AccountInvoiceImport(models.TransientModel):
             logger.warning(import_config)
 
             fp = partner and partner.property_account_position_id or False
-            logger.warning("####"*20)
+            logger.warning("####" * 20)
             logger.warning(taxes)
             if fp:
-                logger.warning("la"*20)
+                logger.warning("la" * 20)
                 account = fp.map_account(account)
                 taxes = fp.map_tax(taxes)
             uom = bdio._match_uom(
@@ -466,7 +466,7 @@ class AccountInvoiceImport(models.TransientModel):
                 raise_exception=False,
             )
 
-            logger.warning("==="*20)
+            logger.warning("===" * 20)
             logger.warning(taxes)
             logger.warning(line.get("taxes"))
             # if not taxes:
@@ -1044,7 +1044,9 @@ class AccountInvoiceImport(models.TransientModel):
                     ),
                 )
             )
-        logger.warning(f"Compare amounts: {parsed_inv['amount_total']}, {invoice.amount_total}")
+        logger.warning(
+            f"Compare amounts: {parsed_inv['amount_total']}, {invoice.amount_total}"
+        )
         # assert not inv_cur.compare_amounts(
         #     parsed_inv["amount_total"], invoice.amount_total
         # )
