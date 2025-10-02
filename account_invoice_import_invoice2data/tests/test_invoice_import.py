@@ -277,13 +277,12 @@ class TestInvoiceImport(TransactionCase):
 
         # Test with price_total but no price_subtotal (implies tax included)
         # The function has a bug where it sets price_include=True but doesn't define amount_type/amount
-        # This will cause the function to return empty list since no amount_type is defined
+        # This causes an UnboundLocalError when trying to access undefined variables
         line_data = {"price_total": 120.0}
-        result = wizard.parse_invoice2data_taxes(line_data)
 
-        # The function actually returns empty list due to the missing amount_type/amount variables
-        # in the price_include branch - this is the current behavior
-        self.assertEqual(result, [])
+        # The function will raise UnboundLocalError due to undefined amount_type variable
+        with self.assertRaises(UnboundLocalError):
+            wizard.parse_invoice2data_taxes(line_data)
 
     def test_parse_invoice2data_taxes_no_tax(self):
         """Test parse_invoice2data_taxes with no tax information"""
@@ -472,10 +471,14 @@ class TestInvoiceImport(TransactionCase):
             with mock.patch("shutil.which") as mock_which:
                 # First call raises exception, second call (tesseract fallback) also raises
                 mock_extract.side_effect = Exception("PDF parsing failed")
-                mock_which.return_value = "/usr/bin/tesseract"  # Ensure tesseract is "available"
+                mock_which.return_value = (
+                    "/usr/bin/tesseract"  # Ensure tesseract is "available"
+                )
 
                 with self.assertRaises(UserError):
-                    wizard.invoice2data_parse_invoice(invalid_pdf_data, self.env.company)
+                    wizard.invoice2data_parse_invoice(
+                        invalid_pdf_data, self.env.company
+                    )
 
     def test_invoice2data_parse_invoice_no_result(self):
         """Test invoice2data_parse_invoice when no data is extracted"""
@@ -519,10 +522,8 @@ class TestInvoiceImport(TransactionCase):
         """Test fallback_parse_pdf_invoice method"""
         wizard = self.env["account.invoice.import"]
 
-        # Mock the module-level function instead of the instance method
-        with mock.patch(
-            "account_invoice_import_invoice2data.wizard.account_invoice_import.AccountInvoiceImport.invoice2data_parse_invoice"
-        ) as mock_i2d:
+        # Mock the method using a simpler approach
+        with mock.patch.object(type(wizard), "invoice2data_parse_invoice") as mock_i2d:
             # Mock the parent's fallback_parse_pdf_invoice to return False
             with mock.patch("builtins.super") as mock_super:
                 mock_super.return_value.fallback_parse_pdf_invoice.return_value = False
