@@ -709,9 +709,9 @@ class AccountInvoiceImport(models.TransientModel):
             "Product Unit of Measure"
         )
         for line in parsed_inv.get("lines", []):
-            line["qty"] = float_round(line["qty"], precision_digits=prec_qty)
+            line["qty"] = float_round(line.get("qty", 0), precision_digits=prec_qty)
             line["price_unit"] = float_round(
-                line["price_unit"], precision_digits=prec_price
+                line.get("price_unit", 0), precision_digits=prec_price
             )
             line["discount"] = float_round(
                 line.get("discount", 0), precision_digits=prec_disc
@@ -1045,12 +1045,6 @@ class AccountInvoiceImport(models.TransientModel):
                     ),
                 )
             )
-        logger.warning(
-            f"Compare amounts: {parsed_inv['amount_total']}, {invoice.amount_total}"
-        )
-        # assert not inv_cur.compare_amounts(
-        #     parsed_inv["amount_total"], invoice.amount_total
-        # )
 
     def xpath_to_dict_helper(self, xml_root, xpath_dict, namespaces):
         for key, value in xpath_dict.items():
