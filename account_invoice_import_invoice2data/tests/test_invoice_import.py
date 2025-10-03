@@ -460,17 +460,16 @@ class TestInvoiceImport(TransactionCase):
         self.assertEqual(line["price_unit"], 100.00)
         self.assertEqual(len(line["taxes"]), 1)
 
-    # def test_invoice2data_parse_invoice_error_handling(self):
-    #     """Test error handling in invoice2data_parse_invoice"""
-    #     wizard = self.env["account.invoice.import"]
+    def test_invoice2data_parse_invoice_error_handling(self):
+        """Test error handling in invoice2data_parse_invoice"""
+        wizard = self.env["account.invoice.import"]
 
-    #     # Mock the entire method to simulate error handling
-    #     with mock.patch.object(wizard, "invoice2data_parse_invoice") as mock_method:
-    #         mock_method.side_effect = UserError("PDF Invoice parsing failed. Error message: PDF parsing failed")
-
-    #         with self.assertRaises(UserError):
-    #             mock_company = self.env["res.company"].browse(1)
-    #             wizard.invoice2data_parse_invoice(b"invalid_pdf_data", mock_company)
+        # Patch the method on the class, not the instance
+        with mock.patch.object(type(wizard), "invoice2data_parse_invoice", side_effect=UserError("PDF Invoice parsing failed. Error message: PDF parsing failed")):
+            with self.assertRaises(UserError) as cm:
+                mock_company = self.env["res.company"].browse(1)
+                wizard.invoice2data_parse_invoice(b"invalid_pdf_data", mock_company)
+            self.assertIn("PDF Invoice parsing failed", str(cm.exception))
 
     # def test_invoice2data_parse_invoice_no_result(self):
     #     """Test invoice2data_parse_invoice when no data is extracted"""
