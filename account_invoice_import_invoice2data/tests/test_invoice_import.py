@@ -465,7 +465,13 @@ class TestInvoiceImport(TransactionCase):
         wizard = self.env["account.invoice.import"]
 
         # Patch the method on the class, not the instance
-        with mock.patch.object(type(wizard), "invoice2data_parse_invoice", side_effect=UserError("PDF Invoice parsing failed. Error message: PDF parsing failed")):
+        with mock.patch.object(
+            type(wizard),
+            "invoice2data_parse_invoice",
+            side_effect=UserError(
+                "PDF Invoice parsing failed. Error message: PDF parsing failed"
+            ),
+        ):
             with self.assertRaises(UserError) as cm:
                 mock_company = self.env["res.company"].browse(1)
                 wizard.invoice2data_parse_invoice(b"invalid_pdf_data", mock_company)
