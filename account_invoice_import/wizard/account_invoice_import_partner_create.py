@@ -2,6 +2,8 @@
 # @author: Alexis de Lattre <alexis.delattre@akretion.com>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
+from markupsafe import Markup
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -79,12 +81,14 @@ class AccountInvoiceImportPartnerCreate(models.TransientModel):
             self.update_partner_id
         )
         self.move_id.message_post(
-            body=_(
-                "Partner <a href=# data-oe-model=res.partner "
-                "data-oe-id=%(partner_id)s>%(partner_name)s</a> has been "
-                "set via the wizard <em>Create or Update Partner</em>. "
-                "The partner has been updated.",
-                partner_id=self.update_partner_id.id,
-                partner_name=self.update_partner_id.display_name,
+            body=Markup(
+                _(
+                    "Partner <a href=# data-oe-model=res.partner "
+                    "data-oe-id=%(partner_id)s>%(partner_name)s</a> has been "
+                    "set via the wizard <em>Create or Update Partner</em>. "
+                    "The partner has been updated.",
+                    partner_id=self.update_partner_id.id,
+                    partner_name=self.update_partner_id.display_name,
+                )
             )
         )
