@@ -242,9 +242,7 @@ class AccountInvoiceImport(models.TransientModel):
         elif parsed_inv.get("journal"):
             journal = self.env["business.document.import"]._match_journal(
                 parsed_inv["journal"],
-                parsed_inv["chatter_msg"],
-                company=import_config["company"],
-                raise_exception=False,
+                parsed_inv["chatter_msg"]
             )
             if (
                 parsed_inv["type"] in ("in_invoice", "in_refund")
@@ -330,9 +328,7 @@ class AccountInvoiceImport(models.TransientModel):
         if parsed_inv.get("currency"):
             currency = bdio._match_currency(
                 parsed_inv["currency"],
-                parsed_inv["chatter_msg"],
-                import_config["company"],
-                raise_exception=False,
+                parsed_inv["chatter_msg"]
             )
             vals["currency_id"] = currency.id
         self._prepare_create_invoice_journal(parsed_inv, import_config, vals)
@@ -429,7 +425,6 @@ class AccountInvoiceImport(models.TransientModel):
                     line["product"],
                     parsed_inv["chatter_msg"],
                     seller=partner,
-                    raise_exception=False,
                 )
             if not product and import_config.get("product"):
                 product = import_config["product"]
@@ -457,7 +452,6 @@ class AccountInvoiceImport(models.TransientModel):
                     parsed_inv["chatter_msg"],
                     company=import_config["company"],
                     type_tax_use=type_tax_use,
-                    raise_exception=False,
                 )
 
             fp = partner and partner.property_account_position_id or False
@@ -468,7 +462,6 @@ class AccountInvoiceImport(models.TransientModel):
                 line.get("uom"),
                 parsed_inv["chatter_msg"],
                 product=product,
-                raise_exception=False,
             )
 
             il_vals = {
@@ -543,10 +536,11 @@ class AccountInvoiceImport(models.TransientModel):
             journal = self.env["account.journal"].browse(vals["journal_id"])
             import_config["account"] = journal.default_account_id
         if not import_config.get("account"):
-            pcateg_obj = self.env["product.category"]
-            import_config["account"] = pcateg_obj._fields[
-                "property_account_expense_categ_id"
-            ].get_company_dependent_fallback(pcateg_obj)
+            import_config["account"] = (
+                self.env["ir.property"]
+                .with_company(import_config["company"].id)
+                ._get("property_account_expense_categ_id", "account.account")
+            )
         if import_config.get("product"):
             import_config["product"] = import_config["product"].with_company(
                 import_config["company"].id
@@ -563,12 +557,12 @@ class AccountInvoiceImport(models.TransientModel):
             )
         if (
             import_config["account"]
-            and import_config["company"] not in import_config["account"].company_ids
+            and import_config["account"].company_id.id != import_config["company"].id
         ):
             import_config["account"] = False
-        # set 'start_end_dates_installed' if the OCA module
-        # account_invoice_start_end_dates from https://github.com/OCA/account-closing
-        # is installed
+        # set 'start_end_dates_installed' if the OCA module \
+        # account_invoice_start_end_dates
+        # from https://github.com/OCA/account-closing is installed
         line_model = self.env["account.move.line"]
         import_config["start_end_dates_installed"] = (
             hasattr(line_model, "start_date")
@@ -641,7 +635,8 @@ class AccountInvoiceImport(models.TransientModel):
             parsed_inv["currency_rec"] = self.env[
                 "business.document.import"
             ]._match_currency(
-                parsed_inv.get("currency"), [], company=company, raise_exception=False
+                parsed_inv.get("currency"),
+                [],
             )
         # Rounding totals
         self._pre_process_parsed_inv_rounding(parsed_inv, company)

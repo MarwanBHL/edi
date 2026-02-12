@@ -86,7 +86,7 @@ class ResPartner(models.Model):
                 vals["taxes"] = taxes
             if (
                 self.invoice_import_account_id
-                and company in self.invoice_import_account_id.company_ids
+                and self.invoice_import_account_id.company_id == company
             ):
                 vals["account"] = self.invoice_import_account_id
         return vals

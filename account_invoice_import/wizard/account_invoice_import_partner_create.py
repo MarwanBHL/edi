@@ -50,7 +50,7 @@ class AccountInvoiceImportPartnerCreate(models.TransientModel):
             # Partner may have been created in the meantime
             res["update_partner_id"] = self.env[
                 "business.document.import"
-            ]._match_partner(import_partner_data, [], raise_exception=False)
+            ]._match_partner(import_partner_data, [])
         return res
 
     def create_partner(self):
