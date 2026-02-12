@@ -241,8 +241,7 @@ class AccountInvoiceImport(models.TransientModel):
             vals["journal_id"] = import_config["journal"].id
         elif parsed_inv.get("journal"):
             journal = self.env["business.document.import"]._match_journal(
-                parsed_inv["journal"],
-                parsed_inv["chatter_msg"]
+                parsed_inv["journal"], parsed_inv["chatter_msg"]
             )
             if (
                 parsed_inv["type"] in ("in_invoice", "in_refund")
@@ -327,8 +326,7 @@ class AccountInvoiceImport(models.TransientModel):
             self._prepare_create_invoice_no_partner(parsed_inv, import_config, vals)
         if parsed_inv.get("currency"):
             currency = bdio._match_currency(
-                parsed_inv["currency"],
-                parsed_inv["chatter_msg"]
+                parsed_inv["currency"], parsed_inv["chatter_msg"]
             )
             vals["currency_id"] = currency.id
         self._prepare_create_invoice_journal(parsed_inv, import_config, vals)
