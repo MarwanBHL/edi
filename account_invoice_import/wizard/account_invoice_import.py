@@ -9,8 +9,10 @@ import logging
 import mimetypes
 from datetime import datetime
 from email.utils import parseaddr
+from io import BytesIO
 
 from lxml import etree
+from markupsafe import Markup
 
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
@@ -18,6 +20,12 @@ from odoo.tools import config, float_is_zero, float_round
 from odoo.tools.misc import format_amount
 
 logger = logging.getLogger(__name__)
+
+try:
+    from pypdf import PdfReader
+except (OSError, ImportError) as err:
+    logger.debug("Cannot import pypdf. Error details below.")
+    logger.debug(err)
 
 
 class AccountInvoiceImport(models.TransientModel):
@@ -42,12 +50,29 @@ class AccountInvoiceImport(models.TransientModel):
         """This method must be inherited by additional modules with
         the same kind of logic as the account_statement_import_*
         modules"""
-        xml_files_dict = self.env["pdf.helper"].pdf_get_xml_files(file_data)
-        for xml_filename, xml_root in xml_files_dict.items():
-            logger.info("Trying to parse XML file %s", xml_filename)
-            parsed_inv = self.parse_xml_invoice(xml_root, company)
-            if parsed_inv:
-                return parsed_inv
+        pdf_reader = PdfReader(BytesIO(file_data))
+        for attach_obj in pdf_reader.attachment_list:
+            filename = attach_obj.name
+            logger.info("Attachment '%s' found in PDF", filename)
+            mime_res = mimetypes.guess_type(filename)
+            if (
+                mime_res
+                and mime_res[0] in ["application/xml", "text/xml"]
+                and attach_obj.content
+            ):
+                try:
+                    xml_root = etree.fromstring(attach_obj.content)
+                except Exception as err:
+                    logger.warning(
+                        "Attachment '%s' is not a valid XML file. Error: %s",
+                        filename,
+                        err,
+                    )
+                    continue
+                logger.info("Start to parse XML file %s", filename)
+                parsed_inv = self.parse_xml_invoice(xml_root, company)
+                if parsed_inv:
+                    return parsed_inv
         parsed_inv = self.fallback_parse_pdf_invoice(file_data, company)
         if not parsed_inv:
             parsed_inv = {}
@@ -107,7 +132,6 @@ class AccountInvoiceImport(models.TransientModel):
         # 'note': 'Note embedded in the document',
         # 'origin': 'Origin note',
         # 'lines': [{
-        #       # Regular product line:
         #       'product': {
         #           'barcode': '4123456000021',
         #           'code': 'GZ250',
@@ -130,16 +154,9 @@ class AccountInvoiceImport(models.TransientModel):
         #       'date_start': '2015-10-01',
         #       'date_end': '2015-10-31',
         #       # date_start and date_end on lines override the global value
-        #       },
-        #       # Section header line (display_type='line_section'):
-        #       {
-        #           'sectionheader': 'Section Title',  # Creates a section header line
-        #       },
-        #       # Note line (display_type='line_note'):
-        #       {
-        #           'line_note': 'Note text here',  # Creates a note line
         #       }],
         # }
+
         # IMPORT CONFIG
         # {
         # 'company': company recordset,  # required field
@@ -161,10 +178,7 @@ class AccountInvoiceImport(models.TransientModel):
             if parsed_inv["partner"].get("email"):
                 source_email = parsed_inv["partner"]["email"]
                 if parsed_inv["partner"].get("name"):
-                    source_email = "%s <%s>" % (
-                        parsed_inv["partner"]["name"],
-                        source_email,
-                    )
+                    source_email = f"{parsed_inv['partner']['name']} <{source_email}>"
                 vals["invoice_source_email"] = source_email
             partner_data = {
                 "is_company": True,
@@ -227,10 +241,7 @@ class AccountInvoiceImport(models.TransientModel):
             vals["journal_id"] = import_config["journal"].id
         elif parsed_inv.get("journal"):
             journal = self.env["business.document.import"]._match_journal(
-                parsed_inv["journal"],
-                parsed_inv["chatter_msg"],
-                company=import_config["company"],
-                raise_exception=False,
+                parsed_inv["journal"], parsed_inv["chatter_msg"]
             )
             if (
                 parsed_inv["type"] in ("in_invoice", "in_refund")
@@ -291,7 +302,6 @@ class AccountInvoiceImport(models.TransientModel):
             "company_id": company.id,
             "invoice_origin": parsed_inv.get("origin"),
             "ref": parsed_inv.get("invoice_number"),
-            "narration": parsed_inv.get("narration", ""),
             "invoice_date": parsed_inv.get("date"),
             "invoice_line_ids": [],
         }
@@ -301,7 +311,7 @@ class AccountInvoiceImport(models.TransientModel):
             partner_type = "supplier"
         partner = None
         if parsed_inv.get("partner"):
-            partner = bdio.with_company(company.id)._match_partner(
+            partner = bdio._match_partner(
                 parsed_inv["partner"],
                 parsed_inv["chatter_msg"],
                 partner_type=partner_type,
@@ -316,10 +326,7 @@ class AccountInvoiceImport(models.TransientModel):
             self._prepare_create_invoice_no_partner(parsed_inv, import_config, vals)
         if parsed_inv.get("currency"):
             currency = bdio._match_currency(
-                parsed_inv["currency"],
-                parsed_inv["chatter_msg"],
-                company=import_config["company"],
-                raise_exception=False,
+                parsed_inv["currency"], parsed_inv["chatter_msg"]
             )
             vals["currency_id"] = currency.id
         self._prepare_create_invoice_journal(parsed_inv, import_config, vals)
@@ -331,7 +338,7 @@ class AccountInvoiceImport(models.TransientModel):
             vals["invoice_payment_term_id"] = False
         # Bank info
         if parsed_inv.get("iban") and vals["move_type"] == "in_invoice" and partner:
-            partner_bank = bdio.with_company(company.id)._match_partner_bank(
+            partner_bank = bdio._match_partner_bank(
                 partner,
                 parsed_inv["iban"],
                 parsed_inv.get("bic"),
@@ -410,30 +417,12 @@ class AccountInvoiceImport(models.TransientModel):
         assert parsed_inv.get("lines")
         bdio = self.env["business.document.import"]
         for line in parsed_inv["lines"]:
-            # Handle special display types first
-            if line.get("line_note"):
-                il_vals = {
-                    "product_id": None,
-                    "name": line.get("line_note"),
-                    "display_type": "line_note",
-                }
-                vals["invoice_line_ids"].append(Command.create(il_vals))
-                continue
-            if line.get("sectionheader"):
-                il_vals = {
-                    "product_id": None,
-                    "name": line.get("sectionheader"),
-                    "display_type": "line_section",
-                }
-                vals["invoice_line_ids"].append(Command.create(il_vals))
-                continue
             product = False
             if line.get("product"):
                 product = bdio._match_product(
                     line["product"],
                     parsed_inv["chatter_msg"],
                     seller=partner,
-                    raise_exception=False,
                 )
             if not product and import_config.get("product"):
                 product = import_config["product"]
@@ -461,7 +450,6 @@ class AccountInvoiceImport(models.TransientModel):
                     parsed_inv["chatter_msg"],
                     company=import_config["company"],
                     type_tax_use=type_tax_use,
-                    raise_exception=False,
                 )
 
             fp = partner and partner.property_account_position_id or False
@@ -472,7 +460,6 @@ class AccountInvoiceImport(models.TransientModel):
                 line.get("uom"),
                 parsed_inv["chatter_msg"],
                 product=product,
-                raise_exception=False,
             )
 
             il_vals = {
@@ -571,7 +558,8 @@ class AccountInvoiceImport(models.TransientModel):
             and import_config["account"].company_id.id != import_config["company"].id
         ):
             import_config["account"] = False
-        # set 'start_end_dates_installed' if the OCA module account_invoice_start_end_dates
+        # set 'start_end_dates_installed' if the OCA module \
+        # account_invoice_start_end_dates
         # from https://github.com/OCA/account-closing is installed
         line_model = self.env["account.move.line"]
         import_config["start_end_dates_installed"] = (
@@ -593,9 +581,14 @@ class AccountInvoiceImport(models.TransientModel):
         if filetype and filetype[0] in ["application/xml", "text/xml"]:
             try:
                 xml_root = etree.fromstring(file_data)
-            except Exception as e:
+            except Exception as err:
                 raise UserError(
-                    _("This XML file is not XML-compliant. Error: %s") % e
+                    _(
+                        "The XML file '%(filename)s' is not XML-compliant. "
+                        "Error: %(err)s",
+                        filename=invoice_filename,
+                        err=err,
+                    )
                 ) from None
             pretty_xml_bytes = etree.tostring(
                 xml_root, pretty_print=True, encoding="UTF-8", xml_declaration=True
@@ -606,9 +599,10 @@ class AccountInvoiceImport(models.TransientModel):
             if parsed_inv is False:
                 raise UserError(
                     _(
-                        "This type of XML invoice is not supported. "
-                        "Did you install the module to support this type "
-                        "of file?"
+                        "Odoo failed to read the XML invoice '%(filename)s'. "
+                        "Did you install the Odoo module to support this type "
+                        "of file?",
+                        filename=invoice_filename,
                     )
                 )
         # Fallback on PDF
@@ -639,7 +633,8 @@ class AccountInvoiceImport(models.TransientModel):
             parsed_inv["currency_rec"] = self.env[
                 "business.document.import"
             ]._match_currency(
-                parsed_inv.get("currency"), [], company=company, raise_exception=False
+                parsed_inv.get("currency"),
+                [],
             )
         # Rounding totals
         self._pre_process_parsed_inv_rounding(parsed_inv, company)
@@ -708,11 +703,9 @@ class AccountInvoiceImport(models.TransientModel):
             "Product Unit of Measure"
         )
         for line in parsed_inv.get("lines", []):
-            if line.get("sectionheader") or line.get("line_note"):
-                continue
-            line["qty"] = float_round(line.get("qty", 0), precision_digits=prec_qty)
+            line["qty"] = float_round(line["qty"], precision_digits=prec_qty)
             line["price_unit"] = float_round(
-                line.get("price_unit", 0), precision_digits=prec_price
+                line["price_unit"], precision_digits=prec_price
             )
             line["discount"] = float_round(
                 line.get("discount", 0), precision_digits=prec_disc
@@ -735,8 +728,8 @@ class AccountInvoiceImport(models.TransientModel):
                     if len(line["taxes"]) > 1:
                         parsed_inv["chatter_msg"].append(
                             _(
-                                "You are importing an invoice in company %(company)s that "
-                                "cannot deduct VAT and the imported invoice has "
+                                "You are importing an invoice in company %(company)s "
+                                "that cannot deduct VAT and the imported invoice has "
                                 "several VAT taxes on the same line (%(line)s). We do "
                                 "not support this scenario for the moment.",
                                 line=line.get("name"),
@@ -780,14 +773,10 @@ class AccountInvoiceImport(models.TransientModel):
             parsed_inv = self.parse_invoice(attach.datas, attach.name, company)
             import_config = {"company": company}
             if parsed_inv.get("partner"):
-                partner = (
-                    self.env["business.document.import"]
-                    .with_company(self.company_id.id)
-                    ._match_partner(
-                        parsed_inv["partner"],
-                        parsed_inv["chatter_msg"],
-                        raise_exception=False,
-                    )
+                partner = self.env["business.document.import"]._match_partner(
+                    parsed_inv["partner"],
+                    parsed_inv["chatter_msg"],
+                    raise_exception=False,
                 )
                 if partner:
                     # To speed-up next match
@@ -830,7 +819,7 @@ class AccountInvoiceImport(models.TransientModel):
             views = [view for view in next_action["views"] if view[1] == "form"]
             next_action.update(
                 {
-                    "view_mode": "form,tree,kanban",
+                    "view_mode": "form,list,kanban",
                     "view_id": False,
                     "views": views,
                     "res_id": invoice_ids[0],
@@ -871,22 +860,23 @@ class AccountInvoiceImport(models.TransientModel):
         logger.info("Invoice ID %d created", invoice.id)
         self.env["business.document.import"].post_create_or_update(parsed_inv, invoice)
         invoice.message_post(
-            body=_(
-                "This invoice has been created automatically via file import. "
-                "Origin: <strong>%s</strong>."
+            body=Markup(
+                _(
+                    "This invoice has been created automatically via file import. "
+                    "Origin: <strong>%s</strong>.",
+                    origin or _("unspecified"),
+                )
             )
-            % (origin or _("unspecified"))
         )
         return invoice
 
-    # TODO v18: move company_id to regular arg before origin
     @api.model
     def create_invoice_webservice(
         self,
         invoice_file_b64,
         invoice_filename,
+        company_id,
         origin,
-        company_id=None,
         email_from=None,
     ):
         # for invoice_file_b64, we accept it as bytes AND str
@@ -909,12 +899,8 @@ class AccountInvoiceImport(models.TransientModel):
         parsed_inv = self.parse_invoice(
             invoice_file_b64, invoice_filename, company, email_from=email_from
         )
-        partner = (
-            self.env["business.document.import"]
-            .with_company(company_id)
-            ._match_partner(
-                parsed_inv["partner"], parsed_inv["chatter_msg"], raise_exception=False
-            )
+        partner = self.env["business.document.import"]._match_partner(
+            parsed_inv["partner"], parsed_inv["chatter_msg"], raise_exception=False
         )
         if partner:
             partner = partner.commercial_partner_id
@@ -1057,14 +1043,15 @@ class AccountInvoiceImport(models.TransientModel):
                     _(
                         "<strong>The total amount of the imported invoice is "
                         "%(real_amount_total)s whereas the total amount computed by "
-                        "Odoo is %(current_amount_total)s</strong>. It is the consequence "
-                        "of a difference between the total tax amount of the invoice "
-                        "(%(real_amount_tax)s) and the total tax amount computed by Odoo "
-                        "(%(current_amount_tax)s). "
+                        "Odoo is %(current_amount_total)s</strong>. It is the "
+                        "consequence of a difference between the total tax amount of "
+                        "the invoice (%(real_amount_tax)s) and the total tax amount "
+                        "computed by Odoo (%(current_amount_tax)s). "
                         "This is often caused by missing taxes in invoice lines due to "
-                        "a failure to find the tax in Odoo that correspond to the tax in "
-                        "the imported invoice or missing configuration of taxes on products "
-                        "or missing configuration of <em>Default Taxes</em> on the partner "
+                        "a failure to find the tax in Odoo that correspond to the tax "
+                        "in the imported invoice or missing configuration of taxes "
+                        "on products or missing configuration of "
+                        "<em>Default Taxes</em> on the partner "
                         "(if there are no products on invoice lines).",
                         real_amount_total=format_amount(
                             self.env, parsed_inv["amount_total"], invoice.currency_id
@@ -1087,8 +1074,8 @@ class AccountInvoiceImport(models.TransientModel):
                 parsed_inv["chatter_msg"].append(
                     _(
                         "The <strong>total tax amount</strong> has been "
-                        "<strong>forced</strong> to %(forced_amount)s (amount computed by "
-                        "Odoo was: %(initial_amount)s).",
+                        "<strong>forced</strong> to %(forced_amount)s (amount "
+                        "computed by Odoo was: %(initial_amount)s).",
                         forced_amount=format_amount(
                             self.env, invoice.amount_tax, invoice.currency_id
                         ),
@@ -1250,7 +1237,8 @@ class AccountInvoiceImport(models.TransientModel):
                 else:
                     attach_bytes = attach.content
                 origin = _(
-                    "email sent by <b>{email_from}</b> on {date} with subject <b>{subject}</b>",
+                    "email sent by <b>{email_from}</b> on {date} "
+                    "with subject <b>{subject}</b>",
                     email_from=msg_dict.get("email_from")
                     and html.escape(msg_dict["email_from"]),
                     date=msg_dict.get("date"),
@@ -1261,8 +1249,8 @@ class AccountInvoiceImport(models.TransientModel):
                     invoice_id = self.create_invoice_webservice(
                         base64.b64encode(attach_bytes),
                         filename,
+                        company_id,
                         origin,
-                        company_id=company_id,
                         email_from=msg_dict.get("email_from"),
                     )
                     logger.info(
