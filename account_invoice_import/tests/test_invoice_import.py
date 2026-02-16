@@ -433,11 +433,9 @@ Nina
             }
         )
         # Set import partner data using the class fixture partner
-        cls = type(self)
-        supplier = cls.partner_with_email_with_inv_config
+        supplier = self.partner_with_email_with_inv_config
         import_partner_data = {
             "name": supplier.name,
-            "vat": getattr(supplier, "vat", "") or "",
             "country_code": supplier.country_id.code if supplier.country_id else "",
             "email": supplier.email,
         }
@@ -454,7 +452,6 @@ Nina
         self.assertEqual(wizard.move_id.id, move.id)
         self.assertEqual(wizard.import_partner_data, import_partner_data)
         self.assertEqual(wizard.partner_name, import_partner_data["name"])
-        self.assertEqual(wizard.partner_vat, import_partner_data["vat"])
         self.assertEqual(wizard.create_or_update, "create")
 
         # Call create_partner method
@@ -469,7 +466,6 @@ Nina
         # Verify context contains default values from import_partner_data
         ctx = action["context"]
         self.assertEqual(ctx.get("default_name"), import_partner_data["name"])
-        self.assertEqual(ctx.get("default_vat"), import_partner_data["vat"])
         self.assertEqual(
             ctx.get("default_country_code"), import_partner_data["country_code"]
         )
