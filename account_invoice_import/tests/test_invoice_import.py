@@ -420,3 +420,52 @@ Nina
         price_prec = self.env["decimal.precision"].precision_get("Product Price")
         self.assertTrue(float_is_zero(iline.price_unit, precision_digits=price_prec))
         self.assertTrue(self.company.currency_id.is_zero(iline.price_subtotal))
+
+    def test_partner_create_wizard_create_partner(self):
+        """Test the create_partner method of the partner create wizard"""
+        # Create a draft vendor bill
+        move = self.env["account.move"].create(
+            {
+                "move_type": "in_invoice",
+                "company_id": self.company.id,
+                "journal_id": self.pur_journal1.id,
+                "date": fields.Date.today(),
+            }
+        )
+        # Set import partner data
+        import_partner_data = {
+            "name": "Test Supplier Co",
+            "vat": "FR12345678901",
+            "country_code": "FR",
+            "email": "info@testsupplier.com",
+        }
+        move.import_partner_data = import_partner_data
+
+        # Create the wizard using the active context
+        wizard = self.env["account.invoice.import.partner.create"].with_context(
+            active_model="account.move", active_id=move.id
+        ).create({})
+
+        # Verify wizard is properly initialized
+        self.assertEqual(wizard.move_id.id, move.id)
+        self.assertEqual(wizard.import_partner_data, import_partner_data)
+        self.assertEqual(wizard.partner_name, import_partner_data["name"])
+        self.assertEqual(wizard.partner_vat, import_partner_data["vat"])
+        self.assertEqual(wizard.create_or_update, "create")
+
+        # Call create_partner method
+        action = wizard.create_partner()
+
+        # Verify the returned action
+        self.assertEqual(action["type"], "ir.actions.act_window")
+        self.assertEqual(action["res_model"], "res.partner")
+        self.assertEqual(action["view_mode"], "form")
+        self.assertIn("create", action["name"].lower())
+
+        # Verify context contains default values from import_partner_data
+        ctx = action["context"]
+        self.assertEqual(ctx.get("default_name"), import_partner_data["name"])
+        self.assertEqual(ctx.get("default_vat"), import_partner_data["vat"])
+        self.assertEqual(ctx.get("default_country_code"), import_partner_data["country_code"])
+        self.assertEqual(ctx.get("default_email"), import_partner_data["email"])
+        self.assertEqual(ctx.get("default_invoice_import_move_id"), move.id)
