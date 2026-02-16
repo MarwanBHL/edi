@@ -447,7 +447,7 @@ Nina
         wizard = (
             self.env["account.invoice.import.partner.create"]
             .with_context(active_model="account.move", active_id=move.id)
-            .create({})
+            .create({"update_partner_id": supplier.id})
         )
 
         # Verify wizard is properly initialized
