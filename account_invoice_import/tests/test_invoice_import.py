@@ -432,19 +432,23 @@ Nina
                 "date": fields.Date.today(),
             }
         )
-        # Set import partner data
+        # Set import partner data using the class fixture partner
+        cls = type(self)
+        supplier = cls.partner_with_email_with_inv_config
         import_partner_data = {
-            "name": "Test Supplier Co",
-            "vat": "FR12345678901",
-            "country_code": "FR",
-            "email": "info@testsupplier.com",
+            "name": supplier.name,
+            "vat": getattr(supplier, "vat", "") or "",
+            "country_code": supplier.country_id.code if supplier.country_id else "",
+            "email": supplier.email,
         }
         move.import_partner_data = import_partner_data
 
         # Create the wizard using the active context
-        wizard = self.env["account.invoice.import.partner.create"].with_context(
-            active_model="account.move", active_id=move.id
-        ).create({})
+        wizard = (
+            self.env["account.invoice.import.partner.create"]
+            .with_context(active_model="account.move", active_id=move.id)
+            .create({})
+        )
 
         # Verify wizard is properly initialized
         self.assertEqual(wizard.move_id.id, move.id)
@@ -466,6 +470,8 @@ Nina
         ctx = action["context"]
         self.assertEqual(ctx.get("default_name"), import_partner_data["name"])
         self.assertEqual(ctx.get("default_vat"), import_partner_data["vat"])
-        self.assertEqual(ctx.get("default_country_code"), import_partner_data["country_code"])
+        self.assertEqual(
+            ctx.get("default_country_code"), import_partner_data["country_code"]
+        )
         self.assertEqual(ctx.get("default_email"), import_partner_data["email"])
         self.assertEqual(ctx.get("default_invoice_import_move_id"), move.id)
