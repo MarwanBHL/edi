@@ -146,7 +146,8 @@ class AccountInvoiceImport(models.TransientModel):
             if line.get("line_note"):
                 line["line_note"] = line.get("line_note")
             line["sectionheader"] = line.get("sectionheader")
-            # qty 0 should be allowed to import notes, but not supported by document_import
+            # qty 0 should be allowed to import notes, but not supported
+            # by document_import
             line["qty"] = float(line.get("qty", 1))
             if line["qty"] > 0:
                 uom_dict = {
