@@ -26,6 +26,7 @@ class TestInvoiceImport(TransactionCase):
                 "amount": 20,
                 "amount_type": "percent",
                 "type_tax_use": "purchase",
+                "unece_type_id": cls.env.ref("account_tax_unece.tax_type_vat").id,
             }
         )
         # Set this tax on Internet access product
