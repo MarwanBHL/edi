@@ -34,6 +34,10 @@ class TestInvoiceImport(TransactionCase):
         )
         internet_product.supplier_taxes_id = [Command.set([frtax.id])]
 
+        # Activate EUR currency
+        eur_currency = cls.env.ref("base.EUR").write({"active": True})
+
+
     def test_have_invoice2data_unavailable(self):
         with mock.patch.dict("sys.modules", {"invoice2data": None}):
             with self.assertLogs("", level="DEBUG") as cm:
@@ -158,7 +162,6 @@ class TestInvoiceImport(TransactionCase):
         self.assertEqual(inv.partner_id, self.env.ref("base.res_partner_12"))
         self.assertEqual(inv.journal_id.type, "purchase")
         self.assertEqual(float_compare(inv.amount_total, 279.84, precision_digits=2), 0)
-        logging.getLogger("").warning(inv.amount_untaxed)
         self.assertEqual(
             float_compare(inv.amount_untaxed, 262.9, precision_digits=2), 0
         )
