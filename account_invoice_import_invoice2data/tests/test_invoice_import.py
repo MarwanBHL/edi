@@ -158,6 +158,7 @@ class TestInvoiceImport(TransactionCase):
         self.assertEqual(inv.partner_id, self.env.ref("base.res_partner_12"))
         self.assertEqual(inv.journal_id.type, "purchase")
         self.assertEqual(float_compare(inv.amount_total, 279.84, precision_digits=2), 0)
+        logging.getLogger("").warning(inv.amount_untaxed)
         self.assertEqual(
             float_compare(inv.amount_untaxed, 262.9, precision_digits=2), 0
         )
