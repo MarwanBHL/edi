@@ -19,6 +19,8 @@ class TestInvoiceImport(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.env = cls.env(context=dict(cls.env.context, **DISABLED_MAIL_CONTEXT))
+        # Activate EUR currency
+        cls.env.ref("base.EUR").write({"active": True})
         frtax = cls.env["account.tax"].create(
             {
                 "name": "French VAT purchase 20.0%",
@@ -34,10 +36,6 @@ class TestInvoiceImport(TransactionCase):
             "account_invoice_import_invoice2data.internet_access"
         )
         internet_product.supplier_taxes_id = [Command.set([frtax.id])]
-
-        # Activate EUR currency
-        eur_currency = cls.env.ref("base.EUR").write({"active": True})
-
 
     def test_have_invoice2data_unavailable(self):
         with mock.patch.dict("sys.modules", {"invoice2data": None}):
